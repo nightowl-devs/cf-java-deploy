@@ -67,9 +67,10 @@ jobs:
       - uses: actions/checkout@v4
         with:
           fetch-depth: 0
+          ref: main
           
       - name: Deploy Java Artifacts to Cloudflare Pages
-        uses: nightowl-devs/cf-java-deploy@v1
+        uses: nightowl-devs/cf-java-deploy@main
         with:
           java-version: '21'
           distribution: 'temurin'
