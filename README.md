@@ -23,7 +23,7 @@ jobs:
           fetch-depth: 0
           
       - name: Deploy Java Artifacts to Cloudflare Pages
-        uses: nightowl-devs/cf-java-deploy@latest
+        uses: nightowl-devs/cf-java-deploy@main
         with:
           cf-api-token: ${{ secrets.CF_API_TOKEN }}
           cf-account-id: ${{ secrets.CF_ACCOUNT_ID }}
