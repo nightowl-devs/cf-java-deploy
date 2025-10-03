@@ -1,4 +1,4 @@
-name: 'Java Artifacts to Cloudflare Pages'
+name: 'Deploy Java Artifacts to Cloudflare Pages'
 description: 'Deploy Java artifacts from Gradle/Maven to Cloudflare Pages as a Maven repository'
 author: 'nightowl-devs'
 
