@@ -2,9 +2,6 @@ name: Deploy to GitHub Marketplace
 
 on:
   push:
-    tags:
-      - "v*"
-
 jobs:
   deploy:
     name: Publish GitHub Action
