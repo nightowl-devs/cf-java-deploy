@@ -210,13 +210,17 @@ runs:
             REPO_DIR="build/publications"
           fi
         fi
-        
+
         mkdir -p ${{ inputs.output-dir }}
-        
+
         if [ -d "$REPO_DIR" ]; then
-          cp -r $REPO_DIR/* ${{ inputs.output-dir }}
+          if [ "$REPO_DIR" != "${{ inputs.output-dir }}" ]; then
+            cp -r $REPO_DIR/* ${{ inputs.output-dir }}
+          else
+            echo "Source and destination directories are the same. Skipping copy."
+          fi
         fi
-        
+
         if [ "${{ inputs.include-javadoc }}" == "true" ] && [ -d "build/docs/javadoc" ]; then
           mkdir -p ${{ inputs.output-dir }}/javadoc
           cp -r build/docs/javadoc/* ${{ inputs.output-dir }}/javadoc
@@ -231,13 +235,17 @@ runs:
         else
           mvn clean package deploy -DaltDeploymentRepository=local::default::file:./target/repository
         fi
-        
+
         mkdir -p ${{ inputs.output-dir }}
-        
+
         if [ -d "target/repository" ]; then
-          cp -r target/repository/* ${{ inputs.output-dir }}
+          if [ "target/repository" != "${{ inputs.output-dir }}" ]; then
+            cp -r target/repository/* ${{ inputs.output-dir }}
+          else
+            echo "Source and destination directories are the same. Skipping copy."
+          fi
         fi
-        
+
         if [ "${{ inputs.include-javadoc }}" == "true" ]; then
           if [ -d "target/site/apidocs" ]; then
             mkdir -p ${{ inputs.output-dir }}/javadoc
