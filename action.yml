@@ -46,7 +46,7 @@ inputs:
     required: false
   output-dir:
     description: 'Output directory for artifacts'
-    default: './cf-deploy-output'
+    default: 'build/repo'
     required: false
   github-token:
     description: 'GitHub token for tag and release creation'
@@ -274,5 +274,5 @@ runs:
         apiToken: ${{ inputs.cf-api-token }}
         accountId: ${{ inputs.cf-account-id }}
         projectName: ${{ inputs.cf-project-name }}
-      #  directory: ${{ inputs.output-dir }}
+        directory: ${{ inputs.output-dir }}
      #   gitHubToken: ${{ inputs.github-token }}

@@ -46,7 +46,7 @@ jobs:
 | `version-marker` | No | `<---!CURRENTVERSION--->` | Version marker to replace |
 | `javadoc-url-marker` | No | `<---!JAVADOCURL--->` | Javadoc URL marker to replace |
 | `include-javadoc` | No | `true` | Include Javadoc documentation |
-| `output-dir` | No | `./cf-deploy-output` | Output directory |
+| `output-dir` | No | `build/repo` | Output directory |
 | `github-token` | No | `${{ github.token }}` | GitHub token for tags and releases |
 
 ## Example configuration
@@ -83,6 +83,41 @@ jobs:
           javadoc-url-marker: '<---!JAVADOCURL--->'
           include-javadoc: 'true'
           output-dir: './cf-output'
+```
+
+## Publishing Configuration
+
+### Gradle
+
+To configure publishing in a Gradle project, add the following to your `build.gradle` file:
+
+```groovy
+publishing {
+    publications {
+        mavenJava(MavenPublication) {
+            from components.java
+            artifactId = 'artifact-id' // Replace with your artifact ID
+        }
+    }
+    repositories {
+        maven {
+            url = uri("${buildDir}/repo")
+        }
+    }
+}
+```
+
+### Maven
+
+For Maven projects, add the following to your `pom.xml` file:
+
+```xml
+<distributionManagement>
+    <repository>
+        <id>local-repo</id>
+        <url>file://${project.build.directory}/repo</url>
+    </repository>
+</distributionManagement>
 ```
 
 ## License
