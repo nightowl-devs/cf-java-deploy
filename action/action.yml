@@ -1,0 +1,278 @@
+name: 'Java Artifacts to Cloudflare Pages'
+description: 'Deploy Java artifacts from Gradle/Maven to Cloudflare Pages as a Maven repository'
+author: 'nightowl-devs'
+
+branding:
+  icon: 'upload-cloud'
+  color: 'orange'
+
+inputs:
+  java-version:
+    description: 'Java version to use'
+    default: '17'
+    required: false
+  distribution:
+    description: 'Java distribution (temurin, zulu, etc.)'
+    default: 'temurin'
+    required: false
+  build-system:
+    description: 'Build system (auto, gradle, maven)'
+    default: 'auto'
+    required: false
+  version-conflict:
+    description: 'How to handle version conflicts (bump, replace, fail)'
+    default: 'bump'
+    required: false
+  cf-api-token:
+    description: 'Cloudflare API Token'
+    required: true
+  cf-account-id:
+    description: 'Cloudflare Account ID'
+    required: true
+  cf-project-name:
+    description: 'Cloudflare Pages project name'
+    required: true
+  update-readme:
+    description: 'Update version in README files'
+    default: 'true'
+    required: false
+  version-marker:
+    description: 'Version marker in README files to replace'
+    default: '<---!CURRENTVERSION--->'
+    required: false
+  include-javadoc:
+    description: 'Include Javadoc in deployment'
+    default: 'true'
+    required: false
+  output-dir:
+    description: 'Output directory for artifacts'
+    default: './cf-deploy-output'
+    required: false
+  github-token:
+    description: 'GitHub token for tag and release creation'
+    default: ${{ github.token }}
+    required: false
+  javadoc-url-marker:
+    description: 'Javadoc URL marker in README files to replace'
+    default: '<---!JAVADOCURL--->'
+    required: false
+
+runs:
+  using: "composite"
+  steps:
+    - name: Detect build system
+      id: detect-build
+      shell: bash
+      run: |
+        if [[ "${{ inputs.build-system }}" != "auto" ]]; then
+          echo "BUILD_SYSTEM=${{ inputs.build-system }}" >> $GITHUB_ENV
+        elif [ -f "build.gradle" ] || [ -f "build.gradle.kts" ]; then
+          echo "BUILD_SYSTEM=gradle" >> $GITHUB_ENV
+        elif [ -f "pom.xml" ]; then
+          echo "BUILD_SYSTEM=maven" >> $GITHUB_ENV
+        else
+          echo "::error::No recognized build system found"
+          exit 1
+        fi
+
+    - name: Setup Java
+      uses: actions/setup-java@v4
+      with:
+        distribution: ${{ inputs.distribution }}
+        java-version: ${{ inputs.java-version }}
+
+    - name: Setup Gradle
+      if: env.BUILD_SYSTEM == 'gradle'
+      uses: gradle/actions/setup-gradle@v4
+
+    - name: Extract version (before bump)
+      id: version_before_bump
+      shell: bash
+      run: |
+        if [ "$BUILD_SYSTEM" == "gradle" ]; then
+          VERSION=$(gradle properties -q | awk -F': ' '/^version:/{print $2}')
+        else
+          VERSION=$(mvn help:evaluate -Dexpression=project.version -q -DforceStdout)
+        fi
+        if [ -z "$VERSION" ]; then 
+          echo "::error::Version not found"
+          exit 1
+        fi
+        echo "VERSION=$VERSION" >> $GITHUB_ENV
+
+    - name: Check if tag exists and bump version if needed
+      id: bump_version
+      shell: bash
+      run: |
+        set -e
+        TAG_EXISTS=$(gh api repos/${GITHUB_REPOSITORY}/git/refs/tags/v${VERSION} --jq '.' 2>/dev/null || echo "notfound")
+        
+        if [ "$TAG_EXISTS" != "notfound" ]; then
+          if [ "${{ inputs.version-conflict }}" == "bump" ]; then
+            IFS='.' read -r MAJOR MINOR PATCH <<< "$VERSION"
+            PATCH=$((PATCH+1))
+            NEW_VERSION="$MAJOR.$MINOR.$PATCH"
+            
+            if [ "$BUILD_SYSTEM" == "gradle" ]; then
+              if [ -f "build.gradle.kts" ]; then
+                sed -i "s/version = \"$VERSION\"/version = \"$NEW_VERSION\"/" build.gradle.kts
+              else
+                sed -i "s/version = '$VERSION'/version = '$NEW_VERSION'/" build.gradle
+              fi
+            else
+              mvn versions:set -DnewVersion=$NEW_VERSION -DgenerateBackupPoms=false
+            fi
+            
+            echo "Version $VERSION exists, bumped to $NEW_VERSION"
+            echo "VERSION=$NEW_VERSION" >> $GITHUB_ENV
+            echo "BUMPED=true" >> $GITHUB_ENV
+          elif [ "${{ inputs.version-conflict }}" == "replace" ]; then
+            echo "Version $VERSION exists, will replace it"
+            echo "BUMPED=false" >> $GITHUB_ENV
+          else
+            echo "::error::Version $VERSION already exists. Aborting due to 'fail' strategy."
+            exit 1
+          fi
+        else
+          echo "BUMPED=false" >> $GITHUB_ENV
+        fi
+      env:
+        GITHUB_TOKEN: ${{ inputs.github-token }}
+
+    - name: Extract version (after bump)
+      shell: bash
+      if: env.BUMPED == 'true'
+      run: |
+        if [ "$BUILD_SYSTEM" == "gradle" ]; then
+          VERSION=$(gradle properties -q | awk -F': ' '/^version:/{print $2}')
+        else
+          VERSION=$(mvn help:evaluate -Dexpression=project.version -q -DforceStdout)
+        fi
+        if [ -z "$VERSION" ]; then exit 1; fi
+        echo "VERSION=$VERSION" >> $GITHUB_ENV
+
+    - name: Commit bumped version
+      shell: bash
+      if: env.BUMPED == 'true'
+      run: |
+        git config user.name "github-actions[bot]"
+        git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+        if [ "$BUILD_SYSTEM" == "gradle" ]; then
+          if [ -f "build.gradle.kts" ]; then
+            git add build.gradle.kts
+          else
+            git add build.gradle
+          fi
+        else
+          git add pom.xml
+        fi
+        git commit -m "chore: bump version to $VERSION"
+        git push origin HEAD:${{ github.ref_name }}
+      env:
+        GITHUB_TOKEN: ${{ inputs.github-token }}
+
+    - name: Get current commit SHA
+      id: new_sha
+      shell: bash
+      run: |
+        SHA=$(git rev-parse HEAD)
+        echo "SHA=$SHA" >> $GITHUB_ENV
+
+    - name: Create Git tag
+      uses: rickstaa/action-create-tag@v1
+      with:
+        tag: v${{ env.VERSION }}
+        message: "Release v${{ env.VERSION }}"
+        github_token: ${{ inputs.github-token }}
+        commit_sha: ${{ env.SHA }}
+        force_push_tag: false
+        tag_exists_error: false
+
+    - name: Create GitHub Release
+      uses: softprops/action-gh-release@v2
+      with:
+        tag_name: v${{ env.VERSION }}
+        name: Release v${{ env.VERSION }}
+        draft: false
+        prerelease: false
+      env:
+        GITHUB_TOKEN: ${{ inputs.github-token }}
+
+    - name: Build with Gradle
+      if: env.BUILD_SYSTEM == 'gradle'
+      shell: bash
+      run: |
+        gradle build publish javadoc
+        REPO_DIR="build/repo"
+        if [ ! -d "$REPO_DIR" ]; then
+          REPO_DIR="build/repository"
+          if [ ! -d "$REPO_DIR" ]; then
+            REPO_DIR="build/publications"
+          fi
+        fi
+        
+        mkdir -p ${{ inputs.output-dir }}
+        
+        if [ -d "$REPO_DIR" ]; then
+          cp -r $REPO_DIR/* ${{ inputs.output-dir }}
+        fi
+        
+        if [ "${{ inputs.include-javadoc }}" == "true" ] && [ -d "build/docs/javadoc" ]; then
+          mkdir -p ${{ inputs.output-dir }}/javadoc
+          cp -r build/docs/javadoc/* ${{ inputs.output-dir }}/javadoc
+        fi
+
+    - name: Build with Maven
+      if: env.BUILD_SYSTEM == 'maven'
+      shell: bash
+      run: |
+        if [ "${{ inputs.include-javadoc }}" == "true" ]; then
+          mvn clean package site javadoc:javadoc deploy -DaltDeploymentRepository=local::default::file:./target/repository
+        else
+          mvn clean package deploy -DaltDeploymentRepository=local::default::file:./target/repository
+        fi
+        
+        mkdir -p ${{ inputs.output-dir }}
+        
+        if [ -d "target/repository" ]; then
+          cp -r target/repository/* ${{ inputs.output-dir }}
+        fi
+        
+        if [ "${{ inputs.include-javadoc }}" == "true" ]; then
+          if [ -d "target/site/apidocs" ]; then
+            mkdir -p ${{ inputs.output-dir }}/javadoc
+            cp -r target/site/apidocs/* ${{ inputs.output-dir }}/javadoc
+          elif [ -d "target/apidocs" ]; then
+            mkdir -p ${{ inputs.output-dir }}/javadoc
+            cp -r target/apidocs/* ${{ inputs.output-dir }}/javadoc
+          fi
+        fi
+
+    - name: Update README version
+      shell: bash
+      if: inputs.update-readme == 'true'
+      run: |
+        find . -name "README*" | while read file; do
+          if [ -f "$file" ]; then
+            sed -i "s/${{ inputs.version-marker }}/$VERSION/g" "$file"
+          fi
+        done
+
+    - name: Update README Javadoc URL
+      shell: bash
+      if: inputs.update-readme == 'true'
+      run: |
+        find . -name "README*" | while read file; do
+          if [ -f "$file" ]; then
+            sed -i "s/${{ inputs.javadoc-url-marker }}/$JAVADOC_URL/g" "$file"
+          fi
+        done
+
+    - name: Upload to Cloudflare Pages
+      uses: cloudflare/pages-action@v1
+      with:
+        apiToken: ${{ inputs.cf-api-token }}
+        accountId: ${{ inputs.cf-account-id }}
+        projectName: ${{ inputs.cf-project-name }}
+        directory: ${{ inputs.output-dir }}
+        gitHubToken: ${{ inputs.github-token }}
