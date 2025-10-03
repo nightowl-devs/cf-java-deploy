@@ -260,7 +260,7 @@ runs:
       shell: bash
       if: inputs.update-readme == 'true'
       run: |
-        find . -name "README*" | while read file; do
+        find . -iname "README*" | while read file; do
           if [ -f "$file" ]; then
             sed -i "s/${{ inputs.version-marker }}/$VERSION/g" "$file"
           fi
@@ -270,7 +270,7 @@ runs:
       shell: bash
       if: inputs.update-readme == 'true'
       run: |
-        find . -name "README*" | while read file; do
+        find . -iname "README*" | while read file; do
           if [ -f "$file" ]; then
             sed -i "s/${{ inputs.javadoc-url-marker }}/$JAVADOC_URL/g" "$file"
           fi
