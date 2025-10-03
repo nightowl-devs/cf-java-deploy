@@ -274,5 +274,5 @@ runs:
         apiToken: ${{ inputs.cf-api-token }}
         accountId: ${{ inputs.cf-account-id }}
         projectName: ${{ inputs.cf-project-name }}
-        directory: ${{ inputs.output-dir }}
-        gitHubToken: ${{ inputs.github-token }}
+      #  directory: ${{ inputs.output-dir }}
+     #   gitHubToken: ${{ inputs.github-token }}
