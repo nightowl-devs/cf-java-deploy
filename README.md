@@ -1,6 +1,6 @@
 # cf-java-deploy
 
---
+
 Easily deploy Java artifacts and Javadoc documentation to Cloudflare Pages, enabling you to host your own repository without the need for a dedicated server. This action also supports updating the latest version of your Java artifact in your README file, which is particularly useful for maintaining up-to-date examples.
 
 ## Usage
