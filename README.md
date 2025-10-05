@@ -84,7 +84,7 @@ jobs:
           version-marker: '<---!CURRENTVERSION--->'
           javadoc-url-marker: '<---!JAVADOCURL--->'
           include-javadoc: 'true'
-          output-dir: './cf-output'
+          output-dir: 'build/repo'
 ```
 
 ## Publishing Configuration
